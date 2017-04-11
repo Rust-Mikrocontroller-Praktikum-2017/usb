@@ -1,4 +1,4 @@
-use super::Usb;
+use super::*;
 use stm32f7::{board, embedded};
 use embedded::interfaces::gpio::Gpio;
 use board::rcc::Rcc;
@@ -6,20 +6,15 @@ use board::nvic::Nvic;
 use board::otg_hs_device::OtgHsDevice;
 use board::otg_hs_global::OtgHsGlobal;
 
-pub fn init(rcc: &mut Rcc, gpio: &mut Gpio, otg_hs_global: &mut OtgHsGlobal, otg_hs_device: &mut OtgHsDevice, nvic: &mut Nvic) -> Usb {
+pub fn init(rcc: &mut Rcc, gpio: &mut Gpio, otg_hs_global: &'static mut OtgHsGlobal, otg_hs_device: &mut OtgHsDevice, nvic: &'static mut Nvic) -> Usb {
 	rcc.ahb1enr.update(|r| r.set_otghsen(true));
 	rcc.ahb1enr.update(|r| r.set_otghsulpien(true));
 	
 	init_pins(gpio);
-	for i in 74..78 {
-		::stm32f7::interrupts::enable_interrupt(i, nvic);
-	}
-
-	// Clear Gintsts to avoid interrupts before init
-	otg_hs_global.otg_hs_gintsts.update(|_| return);
+	unsafe { interrupt::init(&mut otg_hs_global.otg_hs_gintsts, 
+		&mut otg_hs_global.otg_hs_gotgint, nvic); }
 
 	//core init
-
 	otg_hs_global.otg_hs_gccfg.update(|r| r.set_pwrdwn(false));
 
 	otg_hs_global.otg_hs_gusbcfg.update(|r| r.set_physel(false));
@@ -48,7 +43,8 @@ pub fn init(rcc: &mut Rcc, gpio: &mut Gpio, otg_hs_global: &mut OtgHsGlobal, otg
 	otg_hs_global.otg_hs_gintmsk.update(|r| r.set_mmism(true));
 
 	// Wait till we enter device mode
-	while otg_hs_global.otg_hs_gintsts.read().cmod() { /*sleep*/ }
+	//TODO
+	//while otg_hs_global.otg_hs_gintsts.read().cmod() { /*sleep*/ }
 
 	otg_hs_global.otg_hs_gccfg.update(|r| r.set_vbden(true));
 	//otg_hs_global.otg_hs_pcgcctl.write(embedded_stm32f7::otg_hs_global::OtgHsPcgcctl::default());

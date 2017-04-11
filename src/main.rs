@@ -45,6 +45,7 @@ pub unsafe extern "C" fn reset() -> ! {
 }
 
 #[allow(unused_variables)]
+#[inline(never)]
 fn main(hw: board::Hardware) -> ! {
 	let board::Hardware { rcc,
 		pwr,
@@ -85,8 +86,7 @@ fn main(hw: board::Hardware) -> ! {
 			gpio_j,
 			gpio_k);
 	 // enable all gpio ports
-	rcc.ahb1enr
-		.update(|r| {
+	rcc.ahb1enr.update(|r| {
 				r.set_gpioaen(true);
 				r.set_gpioben(true);
 				r.set_gpiocen(true);
@@ -100,37 +100,12 @@ fn main(hw: board::Hardware) -> ! {
 				r.set_gpioken(true);
 				});
 	system_clock::init(rcc, pwr, flash);   
+
 	// init sdram (needed for display buffer)
 	sdram::init(rcc, fmc, &mut gpio);
+	let lcd = lcd::init(ltdc, rcc, &mut gpio);
 
-	// lcd controller
-	let mut lcd = lcd::init(ltdc, rcc, &mut gpio);
-
-	let mut count = 0u32;
-	let mut last_row = 0;
-	let mut last_mask = 0;
-	render::interrupt_debug_init(&mut lcd);
-	let mut gintsts_triggered = 0u32;
-
-	let handle_int = ::alloc::boxed::Box::new(move || {
-		unsafe {
-		let gintsts_addr = 0x40040014 as *mut u32;
-		let gintsts = ::core::ptr::read_volatile(gintsts_addr);
-		gintsts_triggered |= gintsts;
-
-		let mut gotint = 0u32;
-		if gintsts & 0x4 != 0 {
-			let gotint_addr = 0x40040004 as *mut u32;
-			gotint = ::core::ptr::read_volatile(gotint_addr);
-			::core::ptr::write_volatile(gotint_addr, gotint);
-		}
-		::core::ptr::write_volatile(gintsts_addr, gintsts);
-
-		render::interrupt_debug(gintsts, gotint, gintsts_triggered, 
-			&mut count, &mut last_row, &mut last_mask, &mut lcd);
-		}
-	});
-	unsafe { stm32f7::interrupts::HANDLE_INT = Some(handle_int); }
+	unsafe { usb::interrupt::init_debug(lcd); }
 	let usb = usb::init::init(rcc, &mut gpio, otg_hs_global, otg_hs_device, nvic);
 	
 	loop {
