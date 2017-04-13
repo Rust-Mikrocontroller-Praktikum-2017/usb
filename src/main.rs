@@ -3,6 +3,7 @@
 #![feature(asm)]
 #![feature(collections)]
 #![feature(alloc)]
+#![feature(drop_types_in_const)]
 
 mod render;
 mod usb;

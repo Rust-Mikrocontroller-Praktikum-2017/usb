@@ -77,7 +77,7 @@ pub fn render_number_color(mut num: i64, mut base: u32, dim: (u16, u16), mut off
 }
 
 
-pub fn interrupt_debug(gintsts: u32, gotint: u32, gintsts_triggered: u32, count: &mut u32, last_row: &mut u16, last_mask: &mut u32, lcd: &mut lcd::Lcd) {
+pub fn interrupt_debug(gintsts: u32, gintsts_triggered: u32, count: &mut u32, last_row: &mut u16, last_mask: &mut u32, lcd: &mut lcd::Lcd) {
 	//COUNT
 	render_number(*count as i64, 10, TEST_DIM, (0, 400), 4, lcd);
 	*count += 1;
@@ -86,11 +86,8 @@ pub fn interrupt_debug(gintsts: u32, gotint: u32, gintsts_triggered: u32, count:
 	render_number(gintsts_triggered as i64, 2, TEST_DIM, (30, 400), 32, lcd);
 	//GINTSTS
 	render_number(gintsts as i64, 2, TEST_DIM, (100, 400), 32, lcd);
-	//GOTINT
-	if gintsts & 0x4 != 0 {
-		render_number(gotint as i64, 2, TEST_DIM, (120, 400), 32, lcd);
-	}
 	let mut row = 0;
+
 	//IRQ Column
 	for i in 0i64..32 {
 		if (gintsts & (1<<i)) != 0 {
@@ -109,13 +106,25 @@ pub fn interrupt_debug(gintsts: u32, gotint: u32, gintsts_triggered: u32, count:
 			}
 		}
 	}
+
+	//IRQ Triggered Column
+	let mut row_2 = 0;
+	for i in 0i64..32 {
+		if (gintsts_triggered & (1<<i)) != 0 {
+			let color = if gintsts & (1<<i) == 0 {0xffffu16} 
+				else {0xf0f0u16};
+			render_number_color(i, 10, TEST_DIM, 
+				(15+row_2*15, 50), 2, color, lcd);
+			row_2 += 1;
+		}
+	}
 	*last_row = row;
 	*last_mask = gintsts;
 }
 
 pub fn interrupt_debug_init(lcd: &mut lcd::Lcd) {
 	lcd.clear_screen();
-	render_number(5i64, 10, TEST_DIM, (100, 200), 1, lcd);
+	lcd.set_background_color(lcd::Color::rgb(0,0,0));
 	for i in 0..32 {
 		let j = i % 10;
 		let k = i / 10;

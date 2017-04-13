@@ -1,18 +1,16 @@
 use super::*;
-use stm32f7::{board, embedded};
+use stm32f7::{embedded};
 use embedded::interfaces::gpio::Gpio;
 use board::rcc::Rcc;
 use board::nvic::Nvic;
 use board::otg_hs_device::OtgHsDevice;
 use board::otg_hs_global::OtgHsGlobal;
 
-pub fn init(rcc: &mut Rcc, gpio: &mut Gpio, otg_hs_global: &'static mut OtgHsGlobal, otg_hs_device: &mut OtgHsDevice, nvic: &'static mut Nvic) -> Usb {
+pub fn init(rcc: &mut Rcc, gpio: &mut Gpio, otg_hs_global: &'static mut OtgHsGlobal, otg_hs_device: &'static mut OtgHsDevice, nvic: &'static mut Nvic) -> Usb {
 	rcc.ahb1enr.update(|r| r.set_otghsen(true));
 	rcc.ahb1enr.update(|r| r.set_otghsulpien(true));
 	
 	init_pins(gpio);
-	unsafe { interrupt::init(&mut otg_hs_global.otg_hs_gintsts, 
-		&mut otg_hs_global.otg_hs_gotgint, nvic); }
 
 	//core init
 	otg_hs_global.otg_hs_gccfg.update(|r| r.set_pwrdwn(false));
@@ -38,10 +36,6 @@ pub fn init(rcc: &mut Rcc, gpio: &mut Gpio, otg_hs_global: &'static mut OtgHsGlo
 	//otg_hs_global.otg_hs_gusbcfg.update(|r| r.set_tocal()); //not necessary for hs?
 	otg_hs_global.otg_hs_gusbcfg.update(|r| r.set_trdt(0x9)); //only valid value for hs?
 
-	//interrupts
-	otg_hs_global.otg_hs_gintmsk.update(|r| r.set_otgint(true));
-	otg_hs_global.otg_hs_gintmsk.update(|r| r.set_mmism(true));
-
 	// Wait till we enter device mode
 	//TODO
 	//while otg_hs_global.otg_hs_gintsts.read().cmod() { /*sleep*/ }
@@ -52,22 +46,10 @@ pub fn init(rcc: &mut Rcc, gpio: &mut Gpio, otg_hs_global: &'static mut OtgHsGlo
 	//options
 	otg_hs_device.otg_hs_dcfg.update(|r| r.set_dspd(0)); // high speed
 	otg_hs_device.otg_hs_dcfg.update(|r| r.set_nzlsohsk(false)); //no clue
-	// interrupts
-	otg_hs_global.otg_hs_gintmsk.update(|r| r.set_esuspm(true));
-	otg_hs_global.otg_hs_gintmsk.update(|r| r.set_usbsuspm(true));
-	otg_hs_global.otg_hs_gintmsk.update(|r| r.set_usbrst(true));
-	otg_hs_global.otg_hs_gintmsk.update(|r| r.set_enumdnem(true));
-	otg_hs_global.otg_hs_gintmsk.update(|r| r.set_sofm(true));
 
-	let mut full = board::otg_hs_global::OtgHsGintmsk::default();
-	let mut mask = 0b11111000101111001111110011011110; //device mode mask
-	mask &= !(1<<5); //no nptxfem
-	mask &= !(1<<28); //no cidschgm
-	full.bits = mask;
-	otg_hs_global.otg_hs_gintmsk.write(full);
-	
 	otg_hs_device.otg_hs_dctl.update(|r| r.set_sdis(false));
 
+	unsafe { interrupt::init(otg_hs_global,	otg_hs_device, nvic); }
 	Usb {
 	}
 }
